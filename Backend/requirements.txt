@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+pydantic
+python-multipart
+langchain
+langchain-community
+langchain-ollama
+langgraph
+faiss-cpu
+unstructured
+rapidocr-onnxruntime
+Pillow
+duckduckgo-search
