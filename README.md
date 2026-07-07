@@ -38,6 +38,7 @@ At its core, it's not just RAG — it's **agentic RAG**. A LangGraph-powered ReA
 | 📚 **Multi-Document Synthesis** | Upload, index, and query multiple documents simultaneously with strict metadata tracking to prevent context hallucination and source bleed. |
 | 🧩 **Decoupled Architecture** | A responsive React/Vite frontend served via Nginx, communicating with an independent, asynchronous FastAPI backend engine. |
 | 🔍 **Semantic Vector Search** | Uses FAISS for localized, highly efficient L2-distance document chunk matching. |
+| 🖼️ **Multimodal & OCR Support** | Utilizes `unstructured` and `rapidocr-onnxruntime` to process not just digital text, but also scanned PDFs and image files (JPEG/PNG) — paired with **Llama 3.2 Vision** for true vision-based document understanding. |
 | 💾 **Persistent State Storage** | External Docker Volumes ensure FAISS indexes and uploaded files survive container restarts and redeployments — no data amnesia. |
 | 🐳 **Production Containerization** | Optimized multi-stage Docker builds (Alpine + slim base images) for identical runtime environments locally and in the cloud. |
 | ☁️ **Cloud-Ready CI/CD** | Automated GitHub Actions pipeline that builds, tests, and pushes production-ready images to AWS ECR. |
@@ -64,8 +65,11 @@ flowchart TD
     FE -->|"REST calls"| API["FastAPI Backend\n(Python 3.11, async)"]
 
     subgraph Backend["Backend Engine (Containerized)"]
-        API --> ING["Document Ingestion\n& Chunking Pipeline"]
-        ING --> EMB["Embedding Generation\n(Ollama)"]
+        API --> ING["Document Ingestion Pipeline\n(unstructured)"]
+        ING -->|"Digital text"| CHUNK["Text Chunking"]
+        ING -->|"Scanned PDFs / JPEG / PNG"| OCR["OCR Extraction\n(rapidocr-onnxruntime)"]
+        OCR --> CHUNK
+        CHUNK --> EMB["Embedding Generation\n(Ollama)"]
         EMB --> VDB[("FAISS Vector Store\nL2 Similarity Index")]
         VDB <-.->|"read / write"| VOL[("💾 Persistent Docker Volume\nIndex + Uploaded Files")]
 
@@ -75,6 +79,7 @@ flowchart TD
         VDB -->|"Relevant chunks + metadata"| AGENT
         EXT -->|"Fallback results"| AGENT
         AGENT -->|"Synthesized context"| LLM["Ollama Local LLM\n(Qwen 2.5:3b / Llama 3.2 Vision)"]
+        LLM -.->|"Vision-based image\n& scanned-doc reasoning"| OCR
         LLM -->|"Generated answer"| AGENT
     end
 
@@ -90,6 +95,7 @@ flowchart TD
     style VOL fill:#f59e0b,color:#000
     style LLM fill:#111,color:#fff
     style EXT fill:#de5833,color:#fff
+    style OCR fill:#7c3aed,color:#fff
 ```
 
 ### ReAct Agent Decision Loop (Sequence Diagram)
@@ -203,6 +209,8 @@ docker compose up --build
 | **Orchestration** | LangGraph (ReAct Agent) |
 | **LLM Runtime** | Ollama (Qwen 2.5:3b · Llama 3.2 Vision · other local models) |
 | **Retrieval** | FAISS (L2 vector similarity, persistent volume) |
+| **Document Parsing** | `unstructured` (multi-format ingestion) |
+| **OCR Engine** | `rapidocr-onnxruntime` (scanned PDFs & images) |
 | **External Tooling** | Configurable fallback tools (e.g., web search) |
 | **DevOps** | Docker Compose · GitHub Actions · AWS ECR |
 
@@ -217,7 +225,7 @@ docker compose up --build
 - [ ] Multi-agent collaboration for cross-document reasoning
 - [ ] Role-based access control for enterprise deployments
 - [ ] Streaming token responses in the UI
-- [ ] Multimodal document ingestion (vision-based parsing via Llama 3.2 Vision)
+- [ ] Batch OCR pre-processing queue for large scanned-document sets
 
 ---
 
@@ -236,7 +244,7 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 ## 👨‍💻 Maintainer
 
 **Allyan Khan**
-*Software Engineer @ Skytech Developers *
+*Software Engineer* 
 
 Passionate about deploying scalable agentic RAG architectures and multi-agent systems for real-world enterprise operations.
 
