@@ -1,10 +1,10 @@
 <div align="center">
 
-# 🧠 Multi-Document AI Agent
+# 📚 Multi-Document AI Agent
 
 ### 100% Local & Offline Retrieval-Augmented Generation System
 
-*Enterprise-grade, fully decoupled RAG architecture for synthesizing answers across multiple heterogeneous documents — with zero data leakage.*
+*Enterprise-grade, fully decoupled RAG architecture for synthesizing answers across multiple heterogeneous documents — with zero data leakage and persistent state.*
 
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Async-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -23,9 +23,9 @@
 
 ## 📖 Overview
 
-Unlike standard monolithic chat applications or API-dependent wrappers, **Multi-Document AI Agent** is engineered for **absolute privacy and offline capability**. It cleanly separates the user interface from the execution logic, combining an asynchronous Python backend, a localized in-memory vector index, and native tool-calling via local Ollama models — so no document, query, or response ever leaves your machine.
+Unlike standard monolithic chat applications or API-dependent wrappers, **Multi-Document AI Agent** is engineered for **absolute privacy and offline capability**. It cleanly separates the user interface from the execution logic, combining an asynchronous Python backend, a localized vector index backed by persistent Docker volumes, and native tool-calling via local Ollama models — so no document, query, or response ever leaves your machine, and no data is lost between restarts.
 
-At its core, it's not just RAG — it's **agentic RAG**. A LangGraph-powered ReAct agent autonomously reasons about *how* to answer a question, deciding whether to search your indexed documents, query the live web, or both.
+At its core, it's not just RAG — it's **agentic RAG**. A LangGraph-powered ReAct agent autonomously reasons about *how* to answer a question, deciding whether to search your indexed documents, fall back to external tools, or both — with strict metadata tracking to keep multi-document answers grounded and hallucination-free.
 
 ---
 
@@ -33,11 +33,12 @@ At its core, it's not just RAG — it's **agentic RAG**. A LangGraph-powered ReA
 
 | Feature | Description |
 |---|---|
-| 🔒 **100% Local Inference** | Powered entirely by local models (e.g., Qwen 2.5) via Ollama — zero data leakage, fully offline. |
-| 🤖 **Agentic Tool Calling (LangGraph)** | A ReAct agent graph autonomously decides when to search local documents vs. the live internet (DuckDuckGo), instead of relying on rigid, linear RAG. |
+| 🔒 **100% Local Inference** | Powered entirely by local models (e.g., **Qwen 2.5:3b**, **Llama 3.2 Vision**) via Ollama — zero data leakage, fully offline. |
+| 🤖 **Agentic Tool Calling (LangGraph)** | A ReAct agent graph autonomously decides when to search local documents vs. utilizing external fallback tools (e.g., web search), instead of relying on rigid, linear RAG. |
 | 📚 **Multi-Document Synthesis** | Upload, index, and query multiple documents simultaneously with strict metadata tracking to prevent context hallucination and source bleed. |
 | 🧩 **Decoupled Architecture** | A responsive React/Vite frontend served via Nginx, communicating with an independent, asynchronous FastAPI backend engine. |
 | 🔍 **Semantic Vector Search** | Uses FAISS for localized, highly efficient L2-distance document chunk matching. |
+| 💾 **Persistent State Storage** | External Docker Volumes ensure FAISS indexes and uploaded files survive container restarts and redeployments — no data amnesia. |
 | 🐳 **Production Containerization** | Optimized multi-stage Docker builds (Alpine + slim base images) for identical runtime environments locally and in the cloud. |
 | ☁️ **Cloud-Ready CI/CD** | Automated GitHub Actions pipeline that builds, tests, and pushes production-ready images to AWS ECR. |
 
@@ -49,30 +50,31 @@ At its core, it's not just RAG — it's **agentic RAG**. A LangGraph-powered ReA
 
 | Component | Technology | Purpose |
 |---|---|---|
-| **Frontend** | React, Vite, Nginx | Seamless, non-blocking UI with stateful chat memory |
+| **Frontend UI** | React, Vite, Nginx | Seamless, non-blocking UI with stateful chat memory |
 | **Backend API** | FastAPI, Python 3.11 | Asynchronous document chunking, API routing, AI orchestration |
 | **Agent Engine** | LangGraph & Ollama | Autonomous decision routing (ReAct) and local token generation |
-| **Vector DB** | FAISS | Stores document embeddings for rapid semantic retrieval |
-| **Infrastructure** | Docker Compose | Orchestrates network bridges between decoupled microservices |
+| **Vector DB** | FAISS (Persistent Volume) | Stores document embeddings for rapid semantic retrieval |
+| **Infrastructure** | Docker Compose | Orchestrates network bridges and persistent volumes between decoupled microservices |
 
-### Request Flow Diagram
+### System Architecture Flowchart
 
 ```mermaid
 flowchart TD
     U["👤 User"] -->|"Uploads documents / asks question"| FE["React + Vite UI\n(served via Nginx)"]
     FE -->|"REST calls"| API["FastAPI Backend\n(Python 3.11, async)"]
 
-    subgraph Backend["Backend Engine"]
+    subgraph Backend["Backend Engine (Containerized)"]
         API --> ING["Document Ingestion\n& Chunking Pipeline"]
         ING --> EMB["Embedding Generation\n(Ollama)"]
         EMB --> VDB[("FAISS Vector Store\nL2 Similarity Index")]
+        VDB <-.->|"read / write"| VOL[("💾 Persistent Docker Volume\nIndex + Uploaded Files")]
 
         API --> AGENT["LangGraph ReAct Agent"]
-        AGENT -->|"Decision: search docs"| VDB
-        AGENT -->|"Decision: search web"| WEB["DuckDuckGo Search Tool"]
+        AGENT -->|"Decision: search local docs"| VDB
+        AGENT -->|"Decision: use fallback tool"| EXT["External Fallback Tools\n(e.g., Web Search)"]
         VDB -->|"Relevant chunks + metadata"| AGENT
-        WEB -->|"Live results"| AGENT
-        AGENT -->|"Synthesized context"| LLM["Ollama Local LLM\n(e.g., Qwen 2.5)"]
+        EXT -->|"Fallback results"| AGENT
+        AGENT -->|"Synthesized context"| LLM["Ollama Local LLM\n(Qwen 2.5:3b / Llama 3.2 Vision)"]
         LLM -->|"Generated answer"| AGENT
     end
 
@@ -85,30 +87,44 @@ flowchart TD
     style API fill:#009688,color:#fff
     style AGENT fill:#1c3c3c,color:#fff
     style VDB fill:#005571,color:#fff
+    style VOL fill:#f59e0b,color:#000
     style LLM fill:#111,color:#fff
-    style WEB fill:#de5833,color:#fff
+    style EXT fill:#de5833,color:#fff
 ```
 
-### Agent Decision Logic (ReAct Loop)
+### ReAct Agent Decision Loop (Sequence Diagram)
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant Agent as LangGraph Agent
+    actor User
+    participant Agent as LangGraph ReAct Agent
     participant Docs as FAISS (Local Docs)
-    participant Web as DuckDuckGo
+    participant Fallback as External Fallback Tool
+    participant LLM as Ollama Local LLM
 
     User->>Agent: Submit query
-    Agent->>Agent: Reason: Is this answerable from local documents?
+    Agent->>Agent: Reason — Can this be answered from indexed documents?
+
     alt Local knowledge sufficient
         Agent->>Docs: Semantic search (vector similarity)
         Docs-->>Agent: Top-k relevant chunks + source metadata
-    else Requires real-time / external info
-        Agent->>Web: Live web search
-        Web-->>Agent: Fresh results
+    else Local context insufficient
+        Agent->>Fallback: Invoke external fallback tool
+        Fallback-->>Agent: Supplementary results
     end
-    Agent->>Agent: Synthesize context + generate answer (Ollama)
-    Agent-->>User: Final grounded response with citations
+
+    Agent->>Agent: Evaluate — Is retrieved context sufficient to answer?
+    alt Context sufficient
+        Agent->>LLM: Synthesize context + generate answer
+        LLM-->>Agent: Grounded, cited response
+    else Context still insufficient
+        Agent->>Fallback: Retry with alternate tool / query
+        Fallback-->>Agent: Additional results
+        Agent->>LLM: Re-synthesize with expanded context
+        LLM-->>Agent: Final response
+    end
+
+    Agent-->>User: Deliver answer with source attribution
 ```
 
 ---
@@ -122,6 +138,8 @@ sequenceDiagram
 
 ```bash
 ollama pull qwen2.5:3b
+# optional: for multimodal / vision-based document understanding
+ollama pull llama3.2-vision
 ```
 
 ### Installation Steps
@@ -139,7 +157,7 @@ cd multidocument-chatbot
 docker compose up --build
 ```
 
-> **Note:** `docker-compose.yml` is pre-configured to route host-level Ollama traffic securely into the containerized backend.
+> **Note:** `docker-compose.yml` is pre-configured to (1) route host-level Ollama traffic securely into the containerized backend, and (2) mount external volumes so the FAISS index and uploaded files persist across container restarts and redeployments.
 
 **3. Access the application**
 
@@ -168,8 +186,8 @@ docker compose up --build
  ┃ ┣ 📂 src                      # React UI Components
  ┃ ┣ 📜 Dockerfile               # Node 20-slim + Nginx Multi-stage Build
  ┃ ┗ 📜 package.json
- ┣ 📜 .gitignore
- ┗ 📜 docker-compose.yml         # Orchestration Config
+ ┣ 📜 .gitignore                 # Environment & Database Exclusion
+ ┗ 📜 docker-compose.yml         # Orchestration & Volume Config
 ```
 
 ---
@@ -183,9 +201,9 @@ docker compose up --build
 | **UI** | React · Vite · Nginx |
 | **API** | FastAPI · Python 3.11 · Async I/O |
 | **Orchestration** | LangGraph (ReAct Agent) |
-| **LLM Runtime** | Ollama (Qwen 2.5 and other local models) |
-| **Retrieval** | FAISS (L2 vector similarity) |
-| **External Tooling** | DuckDuckGo Search |
+| **LLM Runtime** | Ollama (Qwen 2.5:3b · Llama 3.2 Vision · other local models) |
+| **Retrieval** | FAISS (L2 vector similarity, persistent volume) |
+| **External Tooling** | Configurable fallback tools (e.g., web search) |
 | **DevOps** | Docker Compose · GitHub Actions · AWS ECR |
 
 </div>
@@ -195,10 +213,11 @@ docker compose up --build
 ## 🗺️ Roadmap
 
 - [ ] Support for additional local embedding models
-- [ ] Persistent vector store (disk-backed FAISS / SQLite hybrid)
+- [ ] Hybrid persistent store (disk-backed FAISS / SQLite metadata layer)
 - [ ] Multi-agent collaboration for cross-document reasoning
 - [ ] Role-based access control for enterprise deployments
 - [ ] Streaming token responses in the UI
+- [ ] Multimodal document ingestion (vision-based parsing via Llama 3.2 Vision)
 
 ---
 
@@ -216,8 +235,8 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 
 ## 👨‍💻 Maintainer
 
-**Allyan Nawab Khan**
-*AI Engineer @ Skytech Developers | Software Engineering Student @ UET Mardan*
+**Allyan Khan**
+*Software Engineer @ Skytech Developers *
 
 Passionate about deploying scalable agentic RAG architectures and multi-agent systems for real-world enterprise operations.
 
